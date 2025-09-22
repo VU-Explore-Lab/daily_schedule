@@ -173,11 +173,11 @@ export default function BabyScheduleSurvey() {
 
       <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
         <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span>Enter your name</span>
+          <span>Caregiver's First & Last Name</span>
           <input
             value={yourName}
             onChange={(e) => setYourName(e.target.value)}
-            placeholder="Your name"
+            placeholder="Caregiver's First & Last Name"
             style={{ border: "1px solid #ccc", borderRadius: 8, padding: "6px 10px" }}
           />
         </label>
@@ -233,12 +233,15 @@ export default function BabyScheduleSurvey() {
             cursor: isSubmitting ? 'not-allowed' : 'pointer'
           }}
         >
-          {isSubmitting ? 'Submitting...' : 'Submit to Owner'}
+          {isSubmitting ? 'Submitting...' : 'Submit'}
         </button>
       </div>
 
       <div style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>
         Tip: Click and drag to fill cells with the selected caregiver. Right-click a cell to erase it.
+      </div>
+      <div style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>
+        Please fill in all the activities that your child does in a typical day
       </div>
 
       <div style={{
