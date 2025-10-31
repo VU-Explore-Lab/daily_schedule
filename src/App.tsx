@@ -55,8 +55,10 @@ export default function BabyScheduleSurvey() {
   const [yourName, setYourName] = useState("");
   const [selectedCaregiver, setSelectedCaregiver] = useState<(typeof caregivers)[number]>("Nanny");
   const [otherCaregiver, setOtherCaregiver] = useState("");
+  const [caregiverEmails, setCaregiverEmails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isDraggingRef = useRef(false);
+  const verticalScrollRef = useRef<HTMLDivElement | null>(null);
 
   function getSelectedCaregiverLabel(): string {
     if (selectedCaregiver === "Other") {
@@ -76,17 +78,58 @@ export default function BabyScheduleSurvey() {
     });
   }
 
-  function handleMouseDown(ti: number, ai: number) {
-    isDraggingRef.current = true;
-    setCell(ti, ai, getSelectedCaregiverLabel());
-  }
-  function handleMouseEnter(ti: number, ai: number) {
-    if (!isDraggingRef.current) return;
-    setCell(ti, ai, getSelectedCaregiverLabel());
-  }
-  function handleMouseUp() {
+  // Deprecated: per-cell pointer handlers (replaced by container-level handlers)
+  function handlePointerUp() {
     isDraggingRef.current = false;
   }
+  function handlePointerCancel() {
+    isDraggingRef.current = false;
+  }
+
+  // Container-level dragging for reliable touch painting across cells
+  function paintCellAtPoint(clientX: number, clientY: number) {
+    const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    const tdEl = el?.closest('td[data-ti][data-ai]') as HTMLElement | null;
+    if (!tdEl) return;
+    const tiStr = tdEl.getAttribute('data-ti');
+    const aiStr = tdEl.getAttribute('data-ai');
+    if (tiStr == null || aiStr == null) return;
+    const ti = parseInt(tiStr, 10);
+    const ai = parseInt(aiStr, 10);
+    if (Number.isNaN(ti) || Number.isNaN(ai)) return;
+    setCell(ti, ai, getSelectedCaregiverLabel());
+  }
+
+  function containerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    paintCellAtPoint(e.clientX, e.clientY);
+  }
+  function containerPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!isDraggingRef.current) return;
+    e.preventDefault();
+    paintCellAtPoint(e.clientX, e.clientY);
+  }
+  function containerPointerUp() {
+    isDraggingRef.current = false;
+  }
+  function containerPointerCancel() {
+    isDraggingRef.current = false;
+  }
+
+  // On mount: scroll vertically to show 8:00 AM at the top of the viewport
+  React.useEffect(() => {
+    const container = verticalScrollRef.current;
+    if (!container) return;
+    // Index of 8:00 AM in 30-min slots from midnight
+    const eightAmIndex = 16; // 8 * 2
+    const target = container.querySelector(`td[data-ti="${eightAmIndex}"]`) as HTMLElement | null;
+    if (!target) return;
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const delta = targetRect.top - containerRect.top;
+    container.scrollTop += delta;
+  }, []);
 
   function clearAll() {
     setGrid(Array.from({ length: times.length }, () => Array(activities.length).fill("")));
@@ -107,6 +150,7 @@ export default function BabyScheduleSurvey() {
       Category: string;
       Caregiver: string;
       ParentName: string;
+      CaregiverEmails: string;
       Timestamp: string;
     }> = [];
     grid.forEach((row, timeIndex) => {
@@ -117,6 +161,7 @@ export default function BabyScheduleSurvey() {
             Category: activities[activityIndex],
             Caregiver: caregiver,
             ParentName: yourName || "",
+            CaregiverEmails: caregiverEmails || "",
             Timestamp: new Date().toISOString(),
           });
         }
@@ -165,14 +210,15 @@ export default function BabyScheduleSurvey() {
 
   return (
     <div
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       style={{ fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif", padding: 16 }}
     >
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Baby Schedule Survey</h1>
 
-      <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "flex-start", marginBottom: 12 }}>
+        <label style={{ display: "flex", gap: 8, flexDirection: "column", alignItems: "flex-start" }}>
           <span>Caregiver's First & Last Name</span>
           <input
             value={yourName}
@@ -182,7 +228,17 @@ export default function BabyScheduleSurvey() {
           />
         </label>
 
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <label style={{ display: "flex", gap: 8, flexDirection: "column", alignItems: "flex-start" }}>
+          <span>Caregiver's Email(s)</span>
+          <input
+            value={caregiverEmails}
+            onChange={(e) => setCaregiverEmails(e.target.value)}
+            placeholder="e.g., mom@example.com, dad@example.com"
+            style={{ border: "1px solid #ccc", borderRadius: 8, padding: "6px 10px", minWidth: 280 }}
+          />
+        </label>
+
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <span>Choose caregiver</span>
           <select
             value={selectedCaregiver}
@@ -203,38 +259,40 @@ export default function BabyScheduleSurvey() {
               style={{ border: "1px solid #ccc", borderRadius: 8, padding: "6px 10px" }}
             />
           )}
-        </label>
 
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          {caregivers.map((c) => (
-            <div key={c} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span
-                style={{
-                  width: 14,
-                  height: 14,
-                  borderRadius: 4,
-                  border: "1px solid #ddd",
-                  background: caregiverColors[c],
-                  display: "inline-block",
-                }}
-              />
-              <span style={{ fontSize: 12 }}>{c}</span>
-            </div>
-          ))}
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            {caregivers.map((c) => (
+              <div key={c} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: 4,
+                    border: "1px solid #ddd",
+                    background: caregiverColors[c],
+                    display: "inline-block",
+                  }}
+                />
+                <span style={{ fontSize: 12 }}>{c}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <button onClick={clearAll} style={btnStyle}>Clear all</button>
-        <button 
-          onClick={submitToOwner} 
-          disabled={isSubmitting}
-          style={{
-            ...btnStyle,
-            opacity: isSubmitting ? 0.6 : 1,
-            cursor: isSubmitting ? 'not-allowed' : 'pointer'
-          }}
-        >
-          {isSubmitting ? 'Submitting...' : 'Submit'}
-        </button>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <button onClick={clearAll} style={btnStyle}>Clear all</button>
+          <button 
+            onClick={submitToOwner} 
+            disabled={isSubmitting}
+            style={{
+              ...btnStyle,
+              opacity: isSubmitting ? 0.6 : 1,
+              cursor: isSubmitting ? 'not-allowed' : 'pointer'
+            }}
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit'}
+          </button>
+        </div>
       </div>
 
       <div style={{ fontSize: 12, color: "#555", marginBottom: 12 }}>
@@ -244,51 +302,69 @@ export default function BabyScheduleSurvey() {
         Please fill in all the activities that your child does in a typical day
       </div>
 
-      <div style={{
-        border: "1px solid #ddd",
-        borderRadius: 12,
-        overflow: "auto",
-        maxHeight: "70vh",
-        boxShadow: "0 1px 3px rgba(0,0,0,.05)",
-      }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%" }}>
-          <thead>
-            <tr>
-              <th style={thTimeStyle}>Time</th>
-              {activities.map((a) => (
-                <th key={a} style={thStyle}>{a}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {times.map((t, ti) => (
-              <tr key={t}>
-                <td style={tdTimeStyle}>{t}</td>
-                {activities.map((_, ai) => {
-                  const value = grid[ti][ai];
-                  return (
-                    <td
-                      key={ai}
-                      onMouseDown={() => handleMouseDown(ti, ai)}
-                      onMouseEnter={() => handleMouseEnter(ti, ai)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        eraseCell(ti, ai);
-                      }}
-                      style={{
-                        ...tdStyle,
-                        background: value ? ((caregiverColors as any)[value] ?? caregiverColors.Other) : "#fff",
-                        borderLeft: ai === 0 ? "1px solid #eee" : undefined,
-                      }}
-                    >
-                      <span style={{ opacity: value ? 1 : 0.2 }}>{value || ""}</span>
-                    </td>
-                  );
-                })}
+      <div
+        ref={verticalScrollRef}
+        style={{
+          border: "1px solid #ddd",
+          borderRadius: 12,
+          overflowY: "auto",
+          overflowX: "hidden",
+          maxHeight: "70vh",
+          boxShadow: "0 1px 3px rgba(0,0,0,.05)",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
+        <div
+          onPointerDown={containerPointerDown}
+          onPointerMove={containerPointerMove}
+          onPointerUp={containerPointerUp}
+          onPointerCancel={containerPointerCancel}
+          style={{
+            overflowX: "auto",
+            overflowY: "hidden",
+            touchAction: "none",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          <table className="grid-table" style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%", tableLayout: "fixed" }}>
+            <thead>
+              <tr>
+                <th style={thTimeStyle}>Time</th>
+                {activities.map((a) => (
+                  <th key={a} style={thStyle}>{a}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {times.map((t, ti) => (
+                <tr key={t}>
+                  <td style={tdTimeStyle}>{t}</td>
+                  {activities.map((_, ai) => {
+                    const value = grid[ti][ai];
+                    return (
+                      <td
+                        key={ai}
+                        data-ti={ti}
+                        data-ai={ai}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          eraseCell(ti, ai);
+                        }}
+                        style={{
+                          ...tdStyle,
+                          background: value ? ((caregiverColors as any)[value] ?? caregiverColors.Other) : "#fff",
+                          borderLeft: ai === 0 ? "1px solid #eee" : undefined,
+                        }}
+                      >
+                        <span style={{ opacity: value ? 1 : 0.2 }}>{value || ""}</span>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
@@ -301,22 +377,24 @@ export default function BabyScheduleSurvey() {
 // ---- Styles ----
 const btnStyle: React.CSSProperties = {
   border: "1px solid #ccc",
-  borderRadius: 10,
-  padding: "8px 12px",
+  borderRadius: 8,
+  padding: "6px 10px",
   background: "#fafafa",
   cursor: "pointer",
+  fontSize: 14,
 };
 
 const thTimeStyle: React.CSSProperties = {
   position: "sticky",
   top: 0,
   left: 0,
-  zIndex: 3,
+  zIndex: 4,
   background: "#fafafa",
   textAlign: "left",
   padding: "10px 12px",
   borderBottom: "1px solid #e5e5e5",
   whiteSpace: "nowrap",
+  width: 120,
 };
 
 const thStyle: React.CSSProperties = {
@@ -331,7 +409,7 @@ const thStyle: React.CSSProperties = {
 
 const tdTimeStyle: React.CSSProperties = {
   position: "sticky",
-  zIndex: 2,
+  zIndex: 3,
   left: 0,
   background: "#fff",
   whiteSpace: "nowrap",
@@ -339,13 +417,16 @@ const tdTimeStyle: React.CSSProperties = {
   padding: "8px 12px",
   borderBottom: "1px solid #f0f0f0",
   borderRight: "1px solid #eee",
+  width: 120,
+  boxShadow: "inset -8px 0 8px -8px rgba(0,0,0,.1)",
 };
 
 const tdStyle: React.CSSProperties = {
-  minWidth: 160,
+  minWidth: 120,
   height: 26,
   padding: "0 10px",
   borderBottom: "1px solid #f5f5f5",
   userSelect: "none",
   cursor: "pointer",
+  touchAction: "none",
 };
