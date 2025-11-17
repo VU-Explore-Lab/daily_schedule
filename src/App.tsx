@@ -28,7 +28,7 @@ const activities = [
 ];
 
 // Replace with your Google Apps Script Web App URL
-const SUBMISSION_ENDPOINT = "https://script.google.com/macros/s/AKfycbz1Pu1tO7T0n4Ddx4OMlLDBs8W71X-lOFvi58O2YLCvHsUmQn-Qijka2Asz3ySBEN1Z/exec"; 
+const SUBMISSION_ENDPOINT = "https://script.google.com/macros/s/AKfycbzvxHICkZW52VT7lEo3daJIiD9nTWKiFmQgZxEV3-tGL8MTSKkLav-wdZ757VsGVQTr/exec"; 
 
 // Generate 48 half-hour slots as strings, starting 12:00 AM
 function buildTimes(): string[] {
@@ -222,7 +222,12 @@ export default function BabyScheduleSurvey() {
       console.log("Response data:", result);
       
       if (result.result === "success") {
-        alert(`Thanks! Your schedule has been submitted. ${result.rows} entries added.`);
+        const message = `Thanks! Your schedule has been submitted. ${result.rows} entries added.`;
+        if (result.spreadsheet) {
+          console.log(`Data written to spreadsheet: "${result.spreadsheet}"`);
+          console.log(`Sheet name: "${result.sheet}"`);
+        }
+        alert(message);
       } else {
         throw new Error(result.message || "Submission failed");
       }
