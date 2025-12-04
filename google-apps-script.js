@@ -67,7 +67,7 @@ function doPost(e) {
         row.Caregiver || "",
         row.ParentName || "",
         row.CaregiverEmails || "",
-        row.TypicalWeekNote || "",
+        row.TypicalWeekNote || ""
       ]);
       rowsAdded++;
     });
