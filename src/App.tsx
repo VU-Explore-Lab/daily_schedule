@@ -7,11 +7,10 @@ import React, { useMemo, useRef, useState } from "react";
 // 3) npm run dev
 
 // ---- Helpers ----
-const caregivers = ["Mom", "Dad", "Childcare", "Other", "None (e.g., sleeping)"] as const;
+const caregivers = ["Mom", "Dad", "Other", "None (e.g., sleeping)"] as const;
 const caregiverColors: Record<(typeof caregivers)[number], string> = {
   Mom: "#ffe8ef",   // soft pink
   Dad: "#eaf3ff",   // soft blue
-  "Childcare": "#eafbea", // soft green
   Other: "#f1effa", // soft purple
   "None (e.g., sleeping)": "#f5f5f5", // soft gray
 };
@@ -19,7 +18,9 @@ const activities = [
   "Sleeping",
   "Grooming & dressing",
   "Eating",
-  "Indoor play",
+  "Childcare (e.g., daycare, babysitter)",
+  "Indoor play at home",
+  "Indoor play not at home",
   "Outdoor play",
   "Errands (e.g., commuting, grocery)",
   "Baby class",
@@ -88,12 +89,28 @@ export default function BabyScheduleSurvey() {
   }
 
   function setCell(ti: number, ai: number, caregiversToAdd: string[]) {
+    if (caregiversToAdd.length === 0) return;
+    
     setGrid((g) => {
       const currentValue = g[ti][ai] || "";
-      const currentCaregivers = currentValue ? currentValue.split(", ") : [];
+      // Use a more robust splitting method that handles commas in caregiver names
+      // Split by ", " but be careful with names that contain commas
+      const currentCaregivers = currentValue 
+        ? currentValue.split(", ").filter(c => c.trim().length > 0)
+        : [];
       
-      // Merge: add new caregivers, keep existing ones
-      const merged = new Set([...currentCaregivers, ...caregiversToAdd]);
+      // Merge: add new caregivers, keep existing ones, but deduplicate
+      const merged = new Set<string>();
+      // Add existing caregivers
+      currentCaregivers.forEach(c => merged.add(c.trim()));
+      // Add new caregivers (only if not already present)
+      caregiversToAdd.forEach(c => {
+        const trimmed = c.trim();
+        if (trimmed.length > 0) {
+          merged.add(trimmed);
+        }
+      });
+      
       const newValue = Array.from(merged).join(", ");
       
       if (g[ti][ai] === newValue) return g; // no-op
@@ -186,8 +203,16 @@ export default function BabyScheduleSurvey() {
     grid.forEach((row, timeIndex) => {
       row.forEach((caregiverStr, activityIndex) => {
         if (caregiverStr) { // Only include cells that have caregivers
-          const caregiversList = caregiverStr.split(", ");
-          caregiversList.forEach((caregiver) => {
+          // Split by ", " and filter out empty strings, then deduplicate
+          const caregiversList = caregiverStr
+            .split(", ")
+            .map(c => c.trim())
+            .filter(c => c.length > 0);
+          
+          // Use Set to deduplicate caregivers for this cell
+          const uniqueCaregivers = Array.from(new Set(caregiversList));
+          
+          uniqueCaregivers.forEach((caregiver) => {
             data.push({
               Time: times[timeIndex],
               Category: activities[activityIndex],
@@ -306,7 +331,7 @@ export default function BabyScheduleSurvey() {
         
         <div style={{ marginBottom: 20 }}>
           <p style={{ marginBottom: 8 }}>
-            <strong>Please write a brief note describing your child's typical week and the typical day you are describing</strong> (e.g., my child goes to daycare 5 days a week, spends 1 weekend day with Grandma, and spends 1 weekend day at home. I am describing a "daycare day").
+            <strong>Please write a brief note describing your child's typical week and the typical day you are describing</strong>
           </p>
           <textarea
             value={typicalWeekNote}
@@ -329,9 +354,18 @@ export default function BabyScheduleSurvey() {
           For example, if your child eats with Mom from 7:00 am – 7:30 am and then plays indoors with Dad from 9:00 am – 11:00 am you would fill in the columns like this:
         </p>
         
-        <p style={{ marginBottom: 12, fontStyle: "italic", color: "#666" }}>
-          [Picture/Video example would go here]
-        </p>
+        <div style={{ marginBottom: 12, maxWidth: 600 }}>
+          <iframe
+            width="100%"
+            height="338"
+            src="https://www.youtube.com/embed/MHUpWayfp8U"
+            title="Video example"
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            style={{ borderRadius: 8, maxWidth: "100%" }}
+          />
+        </div>
         
         <p style={{ marginBottom: 8 }}>
           You can right click to de-select a time. You can hit "clear all" to clear the entire form.
@@ -435,7 +469,10 @@ export default function BabyScheduleSurvey() {
                 <td style={tdTimeStyle}>{t}</td>
                 {activities.map((_, ai) => {
                   const value = grid[ti][ai] || "";
-                  const caregiversList = value ? value.split(", ") : [];
+                  // Deduplicate when displaying
+                  const caregiversList = value 
+                    ? Array.from(new Set(value.split(", ").map(c => c.trim()).filter(c => c.length > 0)))
+                    : [];
                   // Use the first caregiver's color, or a gradient if multiple
                   const bgColor = caregiversList.length > 0 
                     ? (caregiverColors[caregiversList[0] as keyof typeof caregiverColors] ?? caregiverColors.Other)
@@ -454,7 +491,7 @@ export default function BabyScheduleSurvey() {
                         background: bgColor,
                         borderLeft: ai === 0 ? "1px solid #eee" : undefined,
                       }}
-                      title={value || ""}
+                      title={caregiversList.join(", ") || ""}
                     >
                       <span style={{ opacity: value ? 1 : 0.2, fontSize: 11 }}>
                         {caregiversList.length > 0 ? caregiversList.join(", ") : ""}
